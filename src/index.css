@@ -1,0 +1,123 @@
+:root {
+  --primary: #646cff;
+  --primary-hover: #535bf2;
+  --bg: #1a1a1a;
+  --surface: #242424;
+  --text: rgba(255, 255, 255, 0.87);
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --danger: #ff4444;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.app-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--surface);
+  padding-bottom: 1rem;
+}
+
+.app-logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-decoration: none;
+  color: var(--primary);
+}
+
+.app-main {
+  min-height: 80vh;
+}
+
+.playlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background: var(--surface);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: border-color 0.25s;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.card:hover {
+  border-color: var(--primary);
+}
+
+.button {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.button:hover {
+  background: var(--primary-hover);
+}
+
+.input {
+  background: #2f2f2f;
+  border: 1px solid #3f3f3f;
+  padding: 0.6rem;
+  border-radius: 4px;
+  color: white;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.song-list {
+  margin-top: 1rem;
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  background: var(--surface);
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.song-item.active {
+  border-color: var(--primary);
+  background: #2a2a3a;
+}
+
+.transpose-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.player-section {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .player-section {
+    grid-template-columns: 1fr;
+  }
+}
