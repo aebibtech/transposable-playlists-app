@@ -292,11 +292,20 @@ body {
 }
 
 .custom-player {
-  background: #222;
+  background: var(--card-bg);
   padding: 2rem;
-  border-radius: 8px;
+  border-radius: 12px;
   text-align: center;
-  border: 1px solid #333;
+  border: 1px solid var(--border-color);
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.2);
+}
+
+.player-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .play-button {
@@ -310,17 +319,107 @@ body {
   background: var(--accent-color);
   border: none;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: all 0.2s;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
 .play-button:hover {
   transform: scale(1.05);
   background: var(--primary-hover);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
 }
 
-.play-icon {
-  width: 32px;
-  height: 32px;
+.seek-container {
+  width: 100%;
+  max-width: 500px;
+}
+
+.time-display {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-family: monospace;
+}
+
+.seek-bar {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.seek-bar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.seek-bar::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.speed-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.speed-btn {
+  background: #334155;
+  border: none;
+  color: var(--text-primary);
+  padding: 0.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.speed-btn:hover {
+  background: #475569;
+}
+
+.speed-val {
+  min-width: 60px;
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: var(--accent-color);
+}
+
+.player-status {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.player-info-row {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.pitch-info {
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+.speed-info {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 @media (max-width: 1024px) {

@@ -29,14 +29,32 @@ app.get('/api/stream', async (req, res) => {
 
     console.log(`[Proxy] Successfully extracted URL for ${videoId}`);
     
+    // Handle Range requests for seeking
+    const headers = {};
+    if (req.headers.range) {
+      headers.range = req.headers.range;
+      console.log(`[Proxy] Range request: ${req.headers.range}`);
+    }
+
     // Pipe the audio stream directly to the response
-    https.get(output.url, (audioStream) => {
-      res.setHeader('Content-Type', 'audio/mpeg'); // Tone.js handles mpeg well
-      
-      // Pass along the content length if available
-      if (audioStream.headers['content-length']) {
-        res.setHeader('Content-Length', audioStream.headers['content-length']);
-      }
+    https.get(output.url, { headers }, (audioStream) => {
+      // Forward status code (e.g., 206 Partial Content)
+      res.status(audioStream.statusCode);
+
+      // Forward relevant headers
+      const forwardHeaders = [
+        'content-type',
+        'content-length',
+        'content-range',
+        'accept-ranges',
+        'cache-control'
+      ];
+
+      forwardHeaders.forEach(h => {
+        if (audioStream.headers[h]) {
+          res.setHeader(h, audioStream.headers[h]);
+        }
+      });
       
       audioStream.pipe(res);
 

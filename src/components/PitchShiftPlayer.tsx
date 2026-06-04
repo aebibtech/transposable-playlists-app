@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
-import { Play, Square, Loader2 } from 'lucide-react';
+import { Play, Square, Loader2, FastForward, Rewind } from 'lucide-react';
 
 interface PitchShiftPlayerProps {
   videoId: string;
@@ -12,6 +12,10 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
 
@@ -19,12 +23,15 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
     setIsLoaded(false);
     setError(null);
     setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
 
     // Create a native Audio element for streaming
     const audio = new Audio();
     const proxyUrl = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001';
     audio.src = `${proxyUrl}/api/stream?videoId=${videoId}`;
     audio.crossOrigin = 'anonymous';
+    audio.playbackRate = playbackRate;
     audioRef.current = audio;
 
     const pitchShift = new Tone.PitchShift({
@@ -48,6 +55,15 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
         console.warn('Autoplay blocked by browser. User interaction required.');
       }
     };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
     const handleError = () => setError('Failed to load audio stream. The video might be restricted.');
     const handleEnded = () => {
       setIsPlaying(false);
@@ -55,12 +71,16 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
     };
 
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
 
     return () => {
       audio.pause();
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
       audio.src = '';
@@ -87,18 +107,75 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
     setIsPlaying(!isPlaying);
   };
 
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const handleSpeedChange = (rate: number) => {
+    setPlaybackRate(rate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="custom-player">
-      <div style={{ marginBottom: '1.5rem' }}>
+      <div className="player-controls">
         {error ? (
            <div style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</div>
         ) : isLoaded ? (
-          <button 
-            className="play-button" 
-            onClick={togglePlay} 
-          >
-            {isPlaying ? <Square size={32} fill="white" className="play-icon" /> : <Play size={32} fill="white" className="play-icon" />}
-          </button>
+          <>
+            <button 
+              className="play-button" 
+              onClick={togglePlay} 
+            >
+              {isPlaying ? <Square size={32} fill="white" /> : <Play size={32} fill="white" />}
+            </button>
+
+            <div className="seek-container">
+              <div className="time-display">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+              <input
+                type="range"
+                className="seek-bar"
+                min={0}
+                max={duration || 0}
+                step={0.1}
+                value={currentTime}
+                onChange={handleSeek}
+              />
+            </div>
+
+            <div className="speed-controls">
+              <button 
+                className="speed-btn"
+                onClick={() => handleSpeedChange(Math.max(0.5, playbackRate - 0.1))}
+                title="Slower"
+              >
+                <Rewind size={20} />
+              </button>
+              <span className="speed-val">{playbackRate.toFixed(2)}x</span>
+              <button 
+                className="speed-btn"
+                onClick={() => handleSpeedChange(Math.min(2, playbackRate + 0.1))}
+                title="Faster"
+              >
+                <FastForward size={20} />
+              </button>
+            </div>
+          </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
             <Loader2 size={40} className="animate-spin" />
@@ -107,15 +184,17 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
         )}
       </div>
       
-      <div style={{ fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+      <div className="player-status">
         {isPlaying ? 'Now Playing' : isLoaded ? 'Ready to Play' : 'Connecting to Stream'}
       </div>
 
-      <div style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
-        Pitch: {transpose > 0 ? `+${transpose}` : transpose} Semitones
-      </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-        Speed: 1.00x (Fixed)
+      <div className="player-info-row">
+        <div className="pitch-info">
+          Pitch: {transpose > 0 ? `+${transpose}` : transpose} Semitones
+        </div>
+        <div className="speed-info">
+          Speed: {playbackRate.toFixed(2)}x
+        </div>
       </div>
     </div>
   );
