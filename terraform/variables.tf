@@ -6,7 +6,7 @@ variable "gcp_project_id" {
 variable "gcp_region" {
   description = "The region to deploy GCP resources"
   type        = string
-  default     = "us-central1"
+  default     = "asia-southeast1"
 }
 
 variable "vercel_api_token" {
