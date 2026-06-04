@@ -74,6 +74,14 @@ function PlaylistView() {
       }, () => {
         queryClient.invalidateQueries({ queryKey: ['songs', playlistId] });
       })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'playlists',
+        filter: `id=eq.${playlistId}`
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['playlist', playlistId] });
+      })
       .subscribe();
 
     return () => {
