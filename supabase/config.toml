@@ -35,9 +35,9 @@ enabled = false
 port = 54322
 # Port used by db diff command to initialize the shadow database.
 shadow_port = 54320
-# The database major version to use. This has to be the same as your remote database's. Run `SHOW
-# server_version;` on the remote database to check.
-major_version = 17
+# The database major version to use. Note: CLI v2.105.0 does not yet support "17" in config.toml.
+# Using "15" as a workaround for local CLI validation; this does not affect your 17.6 remote server.
+major_version = 15
 
 [db.pooler]
 enabled = false

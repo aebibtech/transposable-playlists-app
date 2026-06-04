@@ -27,6 +27,6 @@ resource "vercel_project" "frontend" {
   ]
 }
 
-output "vercel_url" {
-  value = vercel_project.frontend.primary_domain
-}
+# output "vercel_url" {
+#   value = vercel_project.frontend.primary_domain
+# }
