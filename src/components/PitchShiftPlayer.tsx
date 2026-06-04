@@ -18,6 +18,11 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pitchShiftRef = useRef<Tone.PitchShift | null>(null);
+  const onEndedRef = useRef(onEnded);
+
+  useEffect(() => {
+    onEndedRef.current = onEnded;
+  }, [onEnded]);
 
   useEffect(() => {
     setIsLoaded(false);
@@ -67,7 +72,7 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
     const handleError = () => setError('Failed to load audio stream. The video might be restricted.');
     const handleEnded = () => {
       setIsPlaying(false);
-      onEnded?.();
+      onEndedRef.current?.();
     };
 
     audio.addEventListener('canplay', handleCanPlay);
