@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.6.0"
 
   backend "gcs" {
-    bucket = "teamchords-tfstate"
+    bucket = "tf-state-teamchords-tp"
     prefix = "terraform/state"
   }
 
