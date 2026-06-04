@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.6.0"
 
   backend "gcs" {
-    bucket = "tf-state-teamchords-tp"
+    bucket = "tf-state-transposable-playlists"
     prefix = "terraform/state"
   }
 
