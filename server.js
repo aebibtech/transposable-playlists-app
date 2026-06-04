@@ -14,17 +14,12 @@ const getYoutubeDlOptions = (isPlaylist = false) => {
     noCheckCertificates: true,
     noWarnings: true,
     preferFreeFormats: true,
-    addHeader: [
-      'referer:https://www.youtube.com/',
-      'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    ],
-    extractorArgs: 'youtube:player-client=ios,web',
+    format: 'bestaudio'
   };
 
   if (isPlaylist) {
     options.flatPlaylist = true;
-  } else {
-    options.format = 'bestaudio';
+    delete options.format;
   }
 
   // Support cookies to bypass bot detection
