@@ -12,7 +12,9 @@ resource "google_cloud_run_v2_service" "proxy" {
 
   template {
     containers {
-      image = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${google_artifact_registry_repository.proxy_repo.repository_id}/proxy:latest"
+      # Use a placeholder image for initial creation
+      # The CI/CD pipeline will deploy the actual image
+      image = "gcr.io/cloudrun/hello"
       
       ports {
         container_port = 3001
