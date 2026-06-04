@@ -1,0 +1,120 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Tofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.6.2
+
+      - name: OpenTofu Init
+        working-directory: ./terraform
+        run: tofu init
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: OpenTofu Plan
+        working-directory: ./terraform
+        run: tofu plan -no-color
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          TF_VAR_gcp_project_id: ${{ secrets.TF_VAR_GCP_PROJECT_ID }}
+          TF_VAR_vercel_api_token: ${{ secrets.VERCEL_TOKEN }}
+          TF_VAR_supabase_url: ${{ secrets.TF_VAR_SUPABASE_URL }}
+          TF_VAR_supabase_anon_key: ${{ secrets.TF_VAR_SUPABASE_ANON_KEY }}
+
+      - name: OpenTofu Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: ./terraform
+        run: tofu apply -auto-approve -no-color
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          TF_VAR_gcp_project_id: ${{ secrets.TF_VAR_GCP_PROJECT_ID }}
+          TF_VAR_vercel_api_token: ${{ secrets.VERCEL_TOKEN }}
+          TF_VAR_supabase_url: ${{ secrets.TF_VAR_SUPABASE_URL }}
+          TF_VAR_supabase_anon_key: ${{ secrets.TF_VAR_SUPABASE_ANON_KEY }}
+
+  deploy-proxy:
+    name: Deploy Proxy to GCP
+    needs: terraform
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and Push Docker image
+        run: |
+          docker build -t us-central1-docker.pkg.dev/${{ secrets.TF_VAR_GCP_PROJECT_ID }}/transposable-playlists-repo/proxy:${{ github.sha }} -f Dockerfile.proxy .
+          docker push us-central1-docker.pkg.dev/${{ secrets.TF_VAR_GCP_PROJECT_ID }}/transposable-playlists-repo/proxy:${{ github.sha }}
+          docker tag us-central1-docker.pkg.dev/${{ secrets.TF_VAR_GCP_PROJECT_ID }}/transposable-playlists-repo/proxy:${{ github.sha }} us-central1-docker.pkg.dev/${{ secrets.TF_VAR_GCP_PROJECT_ID }}/transposable-playlists-repo/proxy:latest
+          docker push us-central1-docker.pkg.dev/${{ secrets.TF_VAR_GCP_PROJECT_ID }}/transposable-playlists-repo/proxy:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy transposable-playlists-proxy \
+            --image us-central1-docker.pkg.dev/${{ secrets.TF_VAR_GCP_PROJECT_ID }}/transposable-playlists-repo/proxy:${{ github.sha }} \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    needs: terraform
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy Project Artifacts to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  supabase-migrations:
+    name: Supabase Migrations
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Link Project
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} -p ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Push Migrations
+        run: supabase db push
