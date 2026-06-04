@@ -2,9 +2,42 @@ import express from 'express';
 import cors from 'cors';
 import youtubedl from 'youtube-dl-exec';
 import https from 'https';
+import fs from 'fs';
 
 const app = express();
 app.use(cors());
+
+// Helper to get yt-dlp options
+const getYoutubeDlOptions = (isPlaylist = false) => {
+  const options = {
+    dumpSingleJson: true,
+    noCheckCertificates: true,
+    noWarnings: true,
+    preferFreeFormats: true,
+    addHeader: [
+      'referer:https://www.youtube.com/',
+      'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    ],
+    extractorArgs: 'youtube:player-client=ios,web',
+  };
+
+  if (isPlaylist) {
+    options.flatPlaylist = true;
+  } else {
+    options.format = 'bestaudio';
+  }
+
+  // Support cookies to bypass bot detection
+  if (process.env.YT_DLP_COOKIES) {
+    options.cookies = process.env.YT_DLP_COOKIES;
+  } else if (process.env.YT_DLP_COOKIES_FROM_BROWSER) {
+    options.cookiesFromBrowser = process.env.YT_DLP_COOKIES_FROM_BROWSER;
+  } else if (fs.existsSync('cookies.txt')) {
+    options.cookies = 'cookies.txt';
+  }
+
+  return options;
+};
 
 app.get('/api/stream', async (req, res) => {
   const videoId = req.query.videoId;
@@ -15,13 +48,7 @@ app.get('/api/stream', async (req, res) => {
 
   try {
     // Extract the direct audio URL using yt-dlp
-    const output = await youtubedl(videoUrl, {
-      dumpSingleJson: true,
-      noCheckCertificates: true,
-      noWarnings: true,
-      preferFreeFormats: true,
-      format: 'bestaudio'
-    });
+    const output = await youtubedl(videoUrl, getYoutubeDlOptions());
 
     if (!output || !output.url) {
       throw new Error('Failed to extract direct audio URL');
@@ -84,11 +111,7 @@ app.get('/api/info', async (req, res) => {
   console.log(`[Proxy] Extracting info for: ${target}`);
 
   try {
-    const output = await youtubedl(target, {
-      dumpSingleJson: true,
-      flatPlaylist: true,
-      noWarnings: true
-    });
+    const output = await youtubedl(target, getYoutubeDlOptions(!!playlistId));
 
     if (playlistId) {
       // Return simplified entries for playlist
