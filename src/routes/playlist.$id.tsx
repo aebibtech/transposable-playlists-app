@@ -18,6 +18,15 @@ function PlaylistView() {
   const queryClient = useQueryClient();
   const [newSongUrl, setNewSongUrl] = useState('');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+
+  const handleSaveTitle = (val: string) => {
+    if (val.trim() && val !== playlist?.title) {
+      updatePlaylistTitle.mutate(val);
+    }
+    setIsEditingTitle(false);
+  };
 
   // Sync currentSong with live data (for transpose changes)
   const { data: playlist } = useQuery({
@@ -45,6 +54,13 @@ function PlaylistView() {
       return data as Song[];
     },
   });
+
+  // Sync edited title when playlist loads
+  useEffect(() => {
+    if (playlist?.title && !isEditingTitle) {
+      setEditedTitle(playlist.title);
+    }
+  }, [playlist?.title, isEditingTitle]);
 
   // Real-time subscription
   useEffect(() => {
@@ -74,6 +90,32 @@ function PlaylistView() {
       }
     }
   }, [songs, currentSong]);
+
+  const updatePlaylistTitle = useMutation({
+    mutationFn: async (newTitle: string) => {
+      const { error } = await supabase
+        .from('playlists')
+        .update({ title: newTitle })
+        .eq('id', playlistId);
+      if (error) throw error;
+    },
+    onMutate: async (newTitle) => {
+      await queryClient.cancelQueries({ queryKey: ['playlist', playlistId] });
+      const previousPlaylist = queryClient.getQueryData(['playlist', playlistId]);
+      queryClient.setQueryData(['playlist', playlistId], (old: Playlist | undefined) => 
+        old ? { ...old, title: newTitle } : old
+      );
+      return { previousPlaylist };
+    },
+    onError: (_err, _newTitle, context) => {
+      if (context?.previousPlaylist) {
+        queryClient.setQueryData(['playlist', playlistId], context.previousPlaylist);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['playlist', playlistId] });
+    },
+  });
 
   const addSong = useMutation({
     mutationFn: async (url: string) => {
@@ -194,13 +236,37 @@ function PlaylistView() {
     }
   };
 
-  if (isLoading) return <div className="loading">Loading playlist...</div>;
+  if (isLoading || !playlist) return <div className="loading">Loading playlist...</div>;
 
   return (
     <div className="playlist-page">
       <header className="playlist-header">
         <div className="header-content">
-          <h1>{playlist?.title}</h1>
+          {isEditingTitle ? (
+            <input
+              className="title-input"
+              value={editedTitle}
+              onChange={(e) => setEditedTitle(e.target.value)}
+              onBlur={() => handleSaveTitle(editedTitle)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSaveTitle(editedTitle);
+                }
+                if (e.key === 'Escape') {
+                  setEditedTitle(playlist?.title || '');
+                  setIsEditingTitle(false);
+                }
+              }}
+              autoFocus
+            />
+          ) : (
+            <h1 
+              onClick={() => setIsEditingTitle(true)}
+              title="Click to edit title"
+            >
+              {playlist?.title}
+            </h1>
+          )}
           <button className="button-icon" onClick={() => {
             navigator.clipboard.writeText(window.location.href);
             alert('Link copied!');

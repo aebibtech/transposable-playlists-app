@@ -88,17 +88,16 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
   };
 
   return (
-    <div className="custom-player" style={{ background: '#222', padding: '3rem', borderRadius: '8px', textAlign: 'center', border: '1px solid #333' }}>
+    <div className="custom-player">
       <div style={{ marginBottom: '1.5rem' }}>
         {error ? (
            <div style={{ color: 'var(--danger)', marginBottom: '1rem' }}>{error}</div>
         ) : isLoaded ? (
           <button 
-            className="button" 
+            className="play-button" 
             onClick={togglePlay} 
-            style={{ width: '80px', height: '80px', borderRadius: '50%', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            {isPlaying ? <Square size={32} fill="white" /> : <Play size={32} fill="white" />}
+            {isPlaying ? <Square size={32} fill="white" className="play-icon" /> : <Play size={32} fill="white" className="play-icon" />}
           </button>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>

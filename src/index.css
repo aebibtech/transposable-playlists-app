@@ -8,23 +8,28 @@
   --danger: #ff4444;
 }
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   background-color: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 .app-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0 1.5rem;
 }
 
 .app-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--surface);
-  padding-bottom: 1rem;
+  padding: 1rem 0;
 }
 
 .app-logo {
@@ -119,5 +124,8 @@ body {
 @media (max-width: 768px) {
   .player-section {
     grid-template-columns: 1fr;
+  }
+  .app-container {
+    padding: 0 1rem;
   }
 }

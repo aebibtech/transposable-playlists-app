@@ -7,7 +7,7 @@ export const Route = createRootRoute({
       <div className="app-container">
         <header className="app-header">
           <Link to="/" className="app-logo">
-            TransposePlay
+            YT Transposer
           </Link>
         </header>
         <main className="app-main">
