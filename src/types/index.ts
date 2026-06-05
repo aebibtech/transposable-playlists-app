@@ -7,7 +7,8 @@ export interface Playlist {
 export interface Song {
   id: string;
   playlist_id: string;
-  youtube_url: string;
+  audio_id: string;
+  source: 'audius' | 'jamendo' | 'hearthis' | 'radio' | 'invidious';
   title?: string;
   thumbnail_url?: string;
   transpose: number; // Semitones (-12 to 12)

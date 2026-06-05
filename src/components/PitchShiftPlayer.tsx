@@ -3,12 +3,12 @@ import * as Tone from 'tone';
 import { Play, Square, Loader2, FastForward, Rewind } from 'lucide-react';
 
 interface PitchShiftPlayerProps {
-  videoId: string;
+  audioUrl: string;
   transpose: number;
   onEnded?: () => void;
 }
 
-export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlayerProps) {
+export function PitchShiftPlayer({ audioUrl, transpose, onEnded }: PitchShiftPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +33,7 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
 
     // Create a native Audio element for streaming
     const audio = new Audio();
-    const proxyUrl = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001';
-    audio.src = `${proxyUrl}/api/stream?videoId=${videoId}`;
+    audio.src = audioUrl;
     audio.crossOrigin = 'anonymous';
     audio.playbackRate = playbackRate;
     audioRef.current = audio;
@@ -69,7 +68,7 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
       setDuration(audio.duration);
     };
 
-    const handleError = () => setError('Failed to load audio stream. The video might be restricted.');
+    const handleError = () => setError('Failed to load audio stream. The source might be restricted.');
     const handleEnded = () => {
       setIsPlaying(false);
       onEndedRef.current?.();
@@ -91,7 +90,7 @@ export function PitchShiftPlayer({ videoId, transpose, onEnded }: PitchShiftPlay
       audio.src = '';
       pitchShift.dispose();
     };
-  }, [videoId]);
+  }, [audioUrl]);
 
   useEffect(() => {
     if (pitchShiftRef.current) {

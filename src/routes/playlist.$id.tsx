@@ -3,21 +3,24 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import type { Song, Playlist } from '../types';
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash, ChevronUp, ChevronDown, Play as PlayIcon, GripVertical, Share2 } from 'lucide-react';
+import { Plus, Trash, ChevronUp, ChevronDown, Play as PlayIcon, GripVertical, Share2, Search, Loader2 } from 'lucide-react';
 import { PitchShiftPlayer } from '../components/PitchShiftPlayer';
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd';
+import { searchAll, getStreamUrl, type UnifiedTrack } from '../lib/music';
 import '../App.css';
 
 export const Route = createFileRoute('/playlist/$id')({
-
   component: PlaylistView,
 });
 
 function PlaylistView() {
   const { id: playlistId } = Route.useParams();
   const queryClient = useQueryClient();
-  const [newSongUrl, setNewSongUrl] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UnifiedTrack[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  const [currentStreamUrl, setCurrentStreamUrl] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
 
@@ -28,7 +31,6 @@ function PlaylistView() {
     setIsEditingTitle(false);
   };
 
-  // Sync currentSong with live data (for transpose changes)
   const { data: playlist } = useQuery({
     queryKey: ['playlist', playlistId],
     queryFn: async () => {
@@ -55,14 +57,12 @@ function PlaylistView() {
     },
   });
 
-  // Sync edited title when playlist loads
   useEffect(() => {
     if (playlist?.title && !isEditingTitle) {
       setEditedTitle(playlist.title);
     }
   }, [playlist?.title, isEditingTitle]);
 
-  // Real-time subscription
   useEffect(() => {
     const channel = supabase
       .channel(`playlist:${playlistId}`)
@@ -89,7 +89,6 @@ function PlaylistView() {
     };
   }, [playlistId, queryClient]);
 
-  // Update currentSong when the underlying data changes (for instant transpose)
   useEffect(() => {
     if (currentSong && songs) {
       const updated = songs.find(s => s.id === currentSong.id);
@@ -98,6 +97,15 @@ function PlaylistView() {
       }
     }
   }, [songs, currentSong]);
+
+  // Resolve stream URL when currentSong changes
+  useEffect(() => {
+    if (currentSong) {
+      getStreamUrl(currentSong.audio_id, currentSong.source).then(setCurrentStreamUrl);
+    } else {
+      setCurrentStreamUrl(null);
+    }
+  }, [currentSong]);
 
   const updatePlaylistTitle = useMutation({
     mutationFn: async (newTitle: string) => {
@@ -125,57 +133,42 @@ function PlaylistView() {
     },
   });
 
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    try {
+      const results = await searchAll(searchQuery);
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const addSong = useMutation({
-    mutationFn: async (url: string) => {
-      const videoId = extractVideoId(url);
-      const playlistIdMatch = extractPlaylistId(url);
-      const proxyUrl = import.meta.env.VITE_PROXY_URL || 'http://localhost:3001';
-
-      if (playlistIdMatch) {
-        // Import whole playlist
-        const res = await fetch(`${proxyUrl}/api/info?playlistId=${playlistIdMatch}`);
-        const data = await res.json();
-        const baseOrder = songs?.length || 0;
-        
-        const inserts = data.entries.map((entry: any, index: number) => ({
+    mutationFn: async (track: UnifiedTrack) => {
+      const { error } = await supabase.from('songs').insert([
+        {
           playlist_id: playlistId,
-          youtube_url: entry.id,
-          title: entry.title,
-          thumbnail_url: entry.thumbnail,
+          audio_id: (track.source === 'audius' || track.source === 'invidious') ? track.id : track.rawStreamUrl,
+          source: track.source,
+          title: track.title,
+          thumbnail_url: track.thumbnail || '',
           transpose: 0,
-          order: baseOrder + index,
-        }));
-
-        const { error } = await supabase.from('songs').insert(inserts);
-        if (error) throw error;
-      } else if (videoId) {
-        // Single song
-        const res = await fetch(`${proxyUrl}/api/info?videoId=${videoId}`);
-        const info = await res.json();
-        
-        const { error } = await supabase.from('songs').insert([
-          {
-            playlist_id: playlistId,
-            youtube_url: videoId,
-            title: info.title,
-            thumbnail_url: info.thumbnail,
-            transpose: 0,
-            order: (songs?.length || 0),
-          },
-        ]);
-        if (error) throw error;
-      } else {
-        throw new Error('Invalid YouTube URL');
-      }
+          order: (songs?.length || 0),
+        },
+      ]);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['songs', playlistId] });
-      setNewSongUrl('');
+      setSearchQuery('');
+      setSearchResults([]);
     },
   });
 
   const updateTranspose = useCallback((songId: string, transpose: number) => {
-    // Optimistic update for immediate feedback
     queryClient.setQueryData(['songs', playlistId], (old: Song[] | undefined) => {
       if (!old) return old;
       return old.map(s => s.id === songId ? { ...s, transpose } : s);
@@ -197,14 +190,13 @@ function PlaylistView() {
     const [removed] = reordered.splice(result.source.index, 1);
     reordered.splice(result.destination.index, 0, removed);
 
-    // Optimistic UI
     queryClient.setQueryData(['songs', playlistId], reordered);
 
-    // Update orders in DB
     const updates = reordered.map((song, index) => ({
       id: song.id,
       playlist_id: song.playlist_id,
-      youtube_url: song.youtube_url,
+      audio_id: song.audio_id,
+      source: song.source,
       order: index
     }));
 
@@ -224,17 +216,6 @@ function PlaylistView() {
       queryClient.invalidateQueries({ queryKey: ['songs', playlistId] });
     },
   });
-
-  const extractVideoId = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return match && match[2].length === 11 ? match[2] : null;
-  };
-
-  const extractPlaylistId = (url: string) => {
-    const match = url.match(/[&?]list=([^&]+)/);
-    return match ? match[1] : null;
-  };
 
   const playNextSong = () => {
     if (!currentSong || !songs) return;
@@ -257,9 +238,7 @@ function PlaylistView() {
               onChange={(e) => setEditedTitle(e.target.value)}
               onBlur={() => handleSaveTitle(editedTitle)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSaveTitle(editedTitle);
-                }
+                if (e.key === 'Enter') handleSaveTitle(editedTitle);
                 if (e.key === 'Escape') {
                   setEditedTitle(playlist?.title || '');
                   setIsEditingTitle(false);
@@ -268,10 +247,7 @@ function PlaylistView() {
               autoFocus
             />
           ) : (
-            <h1 
-              onClick={() => setIsEditingTitle(true)}
-              title="Click to edit title"
-            >
+            <h1 onClick={() => setIsEditingTitle(true)} title="Click to edit title">
               {playlist?.title}
             </h1>
           )}
@@ -287,15 +263,16 @@ function PlaylistView() {
 
       <div className="player-grid">
         <div className="main-player">
-          {currentSong ? (
+          {currentSong && currentStreamUrl ? (
             <div className="player-card">
               <PitchShiftPlayer
-                videoId={currentSong.youtube_url}
+                audioUrl={currentStreamUrl}
                 transpose={currentSong.transpose}
                 onEnded={playNextSong}
               />
               <div className="current-info">
                 <h2>{currentSong.title}</h2>
+                <div className="source-tag" data-source={currentSong.source}>{currentSong.source}</div>
               </div>
             </div>
           ) : (
@@ -311,18 +288,40 @@ function PlaylistView() {
             <div className="input-group">
               <input
                 className="input"
-                placeholder="YouTube URL or Playlist Link"
-                value={newSongUrl}
-                onChange={(e) => setNewSongUrl(e.target.value)}
+                placeholder="Search All Sources..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
               <button 
                 className="button-primary" 
-                onClick={() => addSong.mutate(newSongUrl)} 
-                disabled={addSong.isPending}
+                onClick={handleSearch} 
+                disabled={isSearching}
               >
-                {addSong.isPending ? '...' : <Plus size={20} />}
+                {isSearching ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
               </button>
             </div>
+
+            {searchResults.length > 0 && (
+              <div className="search-results">
+                {searchResults.map((track, idx) => (
+                  <div key={`${track.id}-${idx}`} className="search-item">
+                    <img src={track.thumbnail} alt="" />
+                    <div className="search-item-info">
+                      <span className="track-title">{track.title}</span>
+                      <span className="track-artist">{track.artist} • <span className="source-label" data-source={track.source}>{track.source}</span></span>
+                    </div>
+                    <button 
+                      className="add-btn"
+                      onClick={() => addSong.mutate(track)}
+                      disabled={addSong.isPending}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <DragDropContext onDragEnd={onDragEnd}>
@@ -346,14 +345,15 @@ function PlaylistView() {
                           </div>
                           
                           <div className="song-thumb" onClick={() => setCurrentSong(song)}>
-                            <img src={song.thumbnail_url || 'https://via.placeholder.com/120x90'} alt="" />
+                            <img src={song.thumbnail_url || 'https://via.placeholder.com/150'} alt="" />
                             <div className="play-overlay">
                               <PlayIcon size={16} fill="white" />
                             </div>
                           </div>
 
                           <div className="song-details" onClick={() => setCurrentSong(song)}>
-                            <span className="song-title">{song.title || song.youtube_url}</span>
+                            <span className="song-title">{song.title}</span>
+                            <span className="source-label-small">{song.source}</span>
                           </div>
                           
                           <div className="song-actions">
@@ -387,3 +387,5 @@ function PlaylistView() {
     </div>
   );
 }
+
+

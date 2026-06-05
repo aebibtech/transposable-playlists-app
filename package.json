@@ -23,13 +23,10 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "lucide-react": "^1.17.0",
-    "play-dl": "^1.9.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-youtube": "^10.1.0",
     "tone": "^15.1.22",
-    "vscode-jsonrpc": "^8.2.0",
-    "youtube-dl-exec": "^3.1.7"
+    "vscode-jsonrpc": "^8.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

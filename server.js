@@ -1,135 +1,56 @@
 import express from 'express';
 import cors from 'cors';
-import youtubedl from 'youtube-dl-exec';
-import https from 'https';
-import fs from 'fs';
 
 const app = express();
 app.use(cors());
 
-// Helper to get yt-dlp options
-const getYoutubeDlOptions = (isPlaylist = false) => {
-  const options = {
-    dumpSingleJson: true,
-    noCheckCertificates: true,
-    noWarnings: true,
-    preferFreeFormats: true,
-    format: 'bestaudio'
-  };
+app.get('/health', (req, res) => {
+  res.send('OK');
+});
 
-  if (isPlaylist) {
-    options.flatPlaylist = true;
-    delete options.format;
-  }
+const INVIDIOUS_INSTANCE = 'https://inv.nadeko.net'; // Switched to a more stable instance
 
-  // Support cookies to bypass bot detection
-  if (process.env.YT_DLP_COOKIES) {
-    options.cookies = process.env.YT_DLP_COOKIES;
-  } else if (process.env.YT_DLP_COOKIES_FROM_BROWSER) {
-    options.cookiesFromBrowser = process.env.YT_DLP_COOKIES_FROM_BROWSER;
-  } else if (fs.existsSync('cookies.txt')) {
-    options.cookies = 'cookies.txt';
-  }
-
-  return options;
-};
-
-app.get('/api/stream', async (req, res) => {
-  const videoId = req.query.videoId;
-  if (!videoId) return res.status(400).send('videoId is required');
-
-  const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  console.log(`[Proxy] yt-dlp extracting: ${videoUrl}`);
-
+app.get('/api/invidious/search', async (req, res) => {
+  const { q } = req.query;
   try {
-    // Extract the direct audio URL using yt-dlp
-    const output = await youtubedl(videoUrl, getYoutubeDlOptions());
-
-    if (!output || !output.url) {
-      throw new Error('Failed to extract direct audio URL');
-    }
-
-    console.log(`[Proxy] Successfully extracted URL for ${videoId}`);
+    const response = await fetch(`${INVIDIOUS_INSTANCE}/api/v1/search?q=${encodeURIComponent(q)}&type=video&limit=10`);
+    if (!response.ok) throw new Error(`Invidious error: ${response.status}`);
     
-    // Handle Range requests for seeking
-    const headers = {};
-    if (req.headers.range) {
-      headers.range = req.headers.range;
-      console.log(`[Proxy] Range request: ${req.headers.range}`);
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('[Proxy] Expected JSON but got:', text.substring(0, 100));
+      throw new Error('Invidious instance returned non-JSON response (possibly rate limited or down).');
     }
 
-    // Pipe the audio stream directly to the response
-    https.get(output.url, { headers }, (audioStream) => {
-      // Forward status code (e.g., 206 Partial Content)
-      res.status(audioStream.statusCode);
-
-      // Forward relevant headers
-      const forwardHeaders = [
-        'content-type',
-        'content-length',
-        'content-range',
-        'accept-ranges',
-        'cache-control'
-      ];
-
-      forwardHeaders.forEach(h => {
-        if (audioStream.headers[h]) {
-          res.setHeader(h, audioStream.headers[h]);
-        }
-      });
-      
-      audioStream.pipe(res);
-
-      audioStream.on('error', (err) => {
-        console.error('[Proxy] Audio stream error:', err.message);
-        if (!res.headersSent) res.status(500).send('Audio stream error');
-      });
-    }).on('error', (err) => {
-      console.error('[Proxy] HTTPS GET error:', err.message);
-      if (!res.headersSent) res.status(500).send('Failed to fetch audio from URL');
-    });
-
+    const data = await response.json();
+    res.json(data);
   } catch (error) {
-    console.error('[Proxy] yt-dlp Error:', error.message);
-    if (!res.headersSent) {
-      res.status(500).send(`Failed to extract stream: ${error.message}`);
-    }
+    console.error('[Proxy] Invidious Search Error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/info', async (req, res) => {
-  const { videoId, playlistId } = req.query;
-  const target = videoId 
-    ? `https://www.youtube.com/watch?v=${videoId}` 
-    : `https://www.youtube.com/playlist?list=${playlistId}`;
-
-  console.log(`[Proxy] Extracting info for: ${target}`);
-
+app.get('/api/invidious/stream', async (req, res) => {
+  const { videoId } = req.query;
   try {
-    const output = await youtubedl(target, getYoutubeDlOptions(!!playlistId));
+    const response = await fetch(`${INVIDIOUS_INSTANCE}/api/v1/videos/${videoId}?local=true`);
+    if (!response.ok) throw new Error(`Invidious error: ${response.status}`);
 
-    if (playlistId) {
-      // Return simplified entries for playlist
-      const entries = output.entries.map(e => ({
-        id: e.id,
-        title: e.title,
-        thumbnail: e.thumbnails?.[0]?.url || ''
-      }));
-      res.json({ title: output.title, entries });
-    } else {
-      res.json({
-        id: output.id,
-        title: output.title,
-        thumbnail: output.thumbnail || output.thumbnails?.[0]?.url || ''
-      });
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Invidious instance returned non-JSON response.');
     }
+
+    const data = await response.json();
+    res.json(data);
   } catch (error) {
-    console.error('[Proxy] Info Error:', error.message);
-    res.status(500).send(`Failed to extract info: ${error.message}`);
+    console.error('[Proxy] Invidious Stream Error:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`[Proxy] Audio proxy running on port ${PORT}`);
+  console.log(`[Proxy] Health check running on port ${PORT}`);
 });
